@@ -1,5 +1,6 @@
 import os
 import time
+from tabulate import tabulate
 
 def ocisti_ekran():
     # Funkcija za brisanje terminala kako bi meni uvijek bio na vrhu
@@ -91,32 +92,39 @@ def SJFAlgorithm(lista_tiketa):
     return zavrseni_tiketi
 
 def ispis(rezultati):
-    print("\n" + "="*30)
-    print("       FINALNI IZVJEŠTAJ")
-    print("="*30)
+    # Sortiramo po ID-u da tabela bude hronološki ispravna
+    rezultati.sort(key=lambda x: x["id"])
     
+    # Zaglavlje kolona tačno prema tvom rječniku i PDF-u
+    headers = ["ID", "Dolazak", "Trajanje", "Kraj", "TAT", "WT"]
+    
+    # Pakujemo podatke u listu lista koju tabulate zahtijeva
+    podaci = []
     for r in rezultati:
-        # Provjeri da li su ključevi tačni: 'id', 'dolazak', 'trajanje', 'kraj', 'tat', 'wt'
-        print(f"ID: {r['id']} | "
-              f"Dolazak: {r['dolazak']} min | "
-              f"Trajanje: {r['trajanje']} min | "
-              f"Kraj: {r['kraj']} | "
-              f"TAT: {r['tat']} | "
-              f"WT: {r['wt']}")
+        podaci.append([
+            r["id"], 
+            r["dolazak"], 
+            r["trajanje"], 
+            r["kraj"], 
+            r["tat"], 
+            r["wt"]
+        ])
     
-    suma_tat = 0
-    suma_wt = 0
+    print("\n" + "="*60)
+    print("                FINALNI IZVJEŠTAJ (SJF)")
+    print("="*60)
+    
+    # Ispisujemo tabelu sa mrežom
+    print(tabulate(podaci, headers=headers, tablefmt="grid"))
+    
+    # Prosjeci
     n = len(rezultati)
+    suma_tat = sum(r['tat'] for r in rezultati)
+    suma_wt = sum(r['wt'] for r in rezultati)
     
-    for r in rezultati:
-        suma_tat += r['tat']
-        suma_wt += r['wt']
-    
-    print("-" * 30)
-    # Prikaz prosjeka na dvije decimale
-    print(f"Prosječan TAT: {suma_tat / n:.2f} min")
+    print(f"\nProsječan TAT: {suma_tat / n:.2f} min")
     print(f"Prosječan WT: {suma_wt / n:.2f} min")
-    input("\nPrisitni bilo sta za nastavak...")
+    input("\nPritisni bilo šta za nastavak...")
 
 def main(): 
     while True:
