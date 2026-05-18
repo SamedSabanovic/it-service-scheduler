@@ -1,55 +1,60 @@
-import os
-import time
-from tabulate import tabulate
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox
 
-def ocisti_ekran():
-    # Funkcija za brisanje terminala kako bi meni uvijek bio na vrhu
-    os.system('cls' if os.name == 'nt' else 'clear')
+# global list sa privremenim tiketima koji se unose preko forme, a zatim se obradjuju kada se pokrene algoritam
+privremeni_tiketi = []
 
-def prikazi_meni():
-    print("\n" + "="*50)
-    print("       IT SERVICE - SISTEM ZA UPRAVLJANJE TIKETIMA")
-    print("="*50)
-    print("Izaberite neki od sljedeće ponuđenih algoritama:")
-    print("-" * 50)
-    print("[1] Shortest Job First (SJF - Non-Preemptive)")
-    print("[2] Shortest Job First preemptive (SRTF)")
-    print("[3] Priority Scheduling")
-    print("[4] Izlaz iz aplikacije")
-    print("-" * 50)
+def osvjezi_formu():
+    # ako je izabran Priority Scheduling (vrijednost "3"), prikazat ce se polje za prioritet
+    if izbor_algoritma.get() == "3":
+        lbl_prioritet.grid()
+        ent_prioritet.grid()
+    else:
+        lbl_prioritet.grid_remove()
+        ent_prioritet.grid_remove()
 
-def unos_podataka(ima_priority = False): 
-    #Unos broja tiketa
-    brojTiketa = int(input("\n Unesi ukupan broj narudžbi/tiketa: "))
-    lista_tiketa = []
-
-    for i in range(brojTiketa):
-        print(f"\n--- Podaci za tiket br. {i+1} ---")
-
-        # Vrijeme dolaska: npr. 0 ako je narudžba tu odmah, ili 5 ako stiže kasnije
-        dolazak = int(input("Vrijeme dolaska narudžbe (min): "))
-        # Burst time: koliko minuta nam treba da završimo posao
-        trajanje = int(input("Vrijeme pripreme narudžbe (min): ")) 
+def dodaj_tiket():
+    try:
+        dolazak = int(ent_dolazak.get())
+        trajanje = int(ent_trajanje.get())
+        prioritet = 0
         
-        #isti fazon kao i struct u c++, inicijalizacija strukture(rjecnika) za jedan tiket
+        if izbor_algoritma.get() == "3":
+            prioritet = int(ent_prioritet.get())
+
+        sljedeci_id = len(privremeni_tiketi) + 1 #+1 jer id pocinje od 1, a ne od 0, tako da prvi tiket ima id 1, drugi 2 itd.
+        
+        # isti fazon kao i struct u c++, inicijalizacija strukture(rjecnika) za jedan tiket
         tiket = {
-            "id": i + 1,
+            "id": sljedeci_id,
             "dolazak": dolazak,
             "trajanje": trajanje,
             "preostalo": trajanje,  # Pocinje sa punim trajanjem (for SRTF)
-            "prioritet": 0,
+            "prioritet": prioritet,
             "kraj": 0,              # Vrijeme kada je posao završen
             "tat": 0,               # Turnaround Time (Ukupno vrijeme u sistemu)
-            "wt": 0                 # Waiting Time (Vrijeme čekanja)
+            "wt": 0                 # Waiting Time (Vrijeme cekanja)
         }
-
-        if (ima_priority): 
-            tiket["prioritet"] = int(input("Prioritet (0 - najveći): "))
         
-        lista_tiketa.append(tiket)
-    return lista_tiketa
+        privremeni_tiketi.append(tiket)
+        
+        # Upisujemo u tabelu na ekranu (prikazujemo prazna polja za rezultate za sada)
+        tabela.insert("", "end", values=(tiket["id"], tiket["dolazak"], tiket["trajanje"], tiket["prioritet"], "", "", ""))
+        
+        # Brisanje unosa iz polja nakon uspješnog dodavanja
+        ent_dolazak.delete(0, tk.END)
+        ent_trajanje.delete(0, tk.END)
+        ent_prioritet.delete(0, tk.END)
+        
+    except ValueError:
+        messagebox.showerror("Greška", "Molimo unesite ispravne numeričke vrijednosti.")
 
-def SJFAlgorithm(lista_tiketa): 
+# funkcija za non-preemptive SJF algoritam, koji se poziva kada korisnik izabere opciju 1 
+# preko radio buttona, i prima listu tiketa koja se koristi samo za obradu algoritma, 
+# a original lista tiketa ostaje netaknuta za prikaz u tabeli, 
+# jer algoritam ce mijenjati polja poput "kraj", "tat" i "wt"
+def SJFAlgorithmNonPE(lista_tiketa): 
     trenutno_vrijeme = 0 # alocirano vrijeme gdje mjerimo sve operacije /poredimo ih s ovom nulom koja raste
     zavrseni_tiketi = [] #appendaju se zavrseni procesi nakon obrade u ovu listu
 
@@ -74,7 +79,8 @@ def SJFAlgorithm(lista_tiketa):
         # i onda provjeravamo prolazimo kroz citavu listu dostupnih 
         #provjeravamo da li postoji ikakav proces kojem je trajanje (burst time) manji od zadanog, ako jeste on postaje novi najkraci
 
-        trenutno_vrijeme += najkraci["trajanje"] # -> non-preemptive (znaci da kada jednom se odlucimo za rasporedjivanje procesa - on se mora uraditi do kraja bez prekida)
+        trenutno_vrijeme += najkraci["trajanje"] # -> non-preemptive (znaci da kada jednom se odlucimo za rasporedjivanje procesa 
+        #- on se mora uraditi do kraja bez prekida)
         #npr ako je trenutno_vrijeme bio na 5.minuti, a usluga traje 10 minuta -> automatski ih sabiramo 
         # i postavljamo trenutno_vrijeme na 15.minutu (to znaci da je procesor bio zauzet cijelo to vrijeme i nije mogao gledati druge narudzbe)
     
@@ -91,72 +97,193 @@ def SJFAlgorithm(lista_tiketa):
         lista_tiketa.remove(najkraci) #brise taj tiket iz glavne liste
     return zavrseni_tiketi
 
-def ispis(rezultati):
-    # Sortiramo po ID-u da tabela bude hronološki ispravna
-    rezultati.sort(key=lambda x: x["id"])
-    
-    # Zaglavlje kolona tačno prema tvom rječniku i PDF-u
-    headers = ["ID", "Dolazak", "Trajanje", "Kraj", "TAT", "WT"]
-    
-    # Pakujemo podatke u listu lista koju tabulate zahtijeva
-    podaci = []
-    for r in rezultati:
-        podaci.append([
-            r["id"], 
-            r["dolazak"], 
-            r["trajanje"], 
-            r["kraj"], 
-            r["tat"], 
-            r["wt"]
-        ])
-    
-    print("\n" + "="*60)
-    print("                FINALNI IZVJEŠTAJ (SJF)")
-    print("="*60)
-    
-    # Ispisujemo tabelu sa mrežom
-    print(tabulate(podaci, headers=headers, tablefmt="grid"))
-    
-    # Prosjeci
-    n = len(rezultati)
-    suma_tat = sum(r['tat'] for r in rezultati)
-    suma_wt = sum(r['wt'] for r in rezultati)
-    
-    print(f"\nProsječan TAT: {suma_tat / n:.2f} min")
-    print(f"Prosječan WT: {suma_wt / n:.2f} min")
-    input("\nPritisni bilo šta za nastavak...")
-
-def main(): 
-    while True:
-        ocisti_ekran()
-        prikazi_meni()
+#funkcija za prikaz rezultata u tabeli, koja se poziva nakon obrade algoritma, 
+# i prima listu zavrsenih tiketa sa popunjenim poljima za kraj, tat i wt
+def prikazi_rezultate_u_tabeli(rezultati):
+    # cistimo tabelu od prethodnih rezultata prije nego sto upisemo nove, da ne bi bilo dupliranja podataka
+    for stavka in tabela.get_children():
+        tabela.delete(stavka)
         
-        izbor = input("Vaš odabir: ")
+    # sort po ID-u po redu, lambda funkcija nam pomaze da sortiramo listu rezultata po kljucu "id" koji je broj narudzbe, 
+    # tako da se prikazuju u redoslijedu unosa, a ne po vremenu dolaska ili necemu drugom
+    rezultati.sort(key=lambda x: x["id"])
 
-        if izbor == '1':
-            ocisti_ekran()
-            print("--- SJF (Non-Preemptive) ---")
-            tiketi = unos_podataka(ima_priority=False)
-            rezultat = SJFAlgorithm(tiketi)
-            ispis(rezultat)
-            
-        elif izbor == '2':
-            ocisti_ekran()
-            print("--- Shortest Remaining Time First (SRTF) ---")
-            tiketi = unos_podataka(ima_priority=False)
-            
-        elif izbor == '3':
-            ocisti_ekran()
-            print("--- Priority Scheduling ---")
-            tiketi = unos_podataka(ima_priority = True)
-            
-        elif izbor == '4':
-            print("\nIzlazak iz sistema...")
-            break
-            
-        else:
-            print("\nGreška: Nevalidna opcija. Pokušajte ponovo.")
-            time.sleep(1)
+    suma_tat = 0 
+    suma_wt = 0
 
-if __name__ == "__main__":
-    main()
+    for r in rezultati:
+        # upisivanje gotovih podataka u tabelu, sada vec sa popunjenim poljima za kraj, tat i wt
+        tabela.insert("", "end", values=(
+            r["id"], r["dolazak"], r["trajanje"], r["prioritet"], r["kraj"], r["tat"], r["wt"]
+        ))
+        suma_tat += r["tat"] 
+        suma_wt += r["wt"]
+
+    # racunamo prosjecan TAT i WT, dijeljenjem ukupne sume sa brojem tiketa (n), i prikazujemo ih u labeli ispod tabele
+    # n::.2f znaci da ce se broj formatirati sa 2 decimale, 
+    # tako da dobijemo lijep i pregledan prikaz prosjecnih vrijednosti
+    n = len(rezultati)
+    lbl_statistika.config(text=f"Prosječan TAT: {suma_tat / n:.2f} min  |  Prosječan WT: {suma_wt / n:.2f} min")
+
+#funkcija koja se poziva kada korisnik klikne na dugme "POKRENI OBRADU", 
+# ona provjerava koji je algoritam izabran preko radio buttona
+def pokreni_algoritam():
+    # ako je lista tiketa prazna, ne mozemo pokrenuti algoritam, jer nema sta da se obradi, tako da prikazujemo upozorenje korisniku
+    if not privremeni_tiketi:
+        messagebox.showwarning("Upozorenje", "Lista tiketa je prazna. Unesite podatke prvo.")
+        return
+
+    algoritam = izbor_algoritma.get() #uzimamo vrijednost iz radio buttona da znamo koji algoritam je izabran, 
+    #i onda na osnovu toga pokrecemo odgovarajuci kod
+    
+    # pravi se copy liste tiketa, da ne bi mijenjali originalnu listu tiketa koja se koristi za prikaz u tabeli,
+    # jer algoritmi ce mijenjati polja poput "kraj", "tat" i "wt", a treba 
+    # da tabela ostane netaknuta dok se ne prikazu rezultati, 
+    # tako da pravimo novu listu koja ce se koristiti samo za obradu algoritma
+    lista_za_obradu = [tiket.copy() for tiket in privremeni_tiketi]
+
+    #konacan izbor algoritma, i pozivanje odgovarajuce funkcije, a zatim prikaz rezultata u tabeli
+    if algoritam == "1":
+        rezultati = SJFAlgorithmNonPE(lista_za_obradu)
+        prikazi_rezultate_u_tabeli(rezultati)
+    elif algoritam == "2":
+        messagebox.showinfo("SRTF", "Ovdje će ići tvoj SRTF kôd.")
+    elif algoritam == "3":
+        messagebox.showinfo("Priority", "Ovdje će ići tvoj Priority kôd.")
+
+#standard cls funkcija koja cisti sve podatke i resetuje formu, 
+# tako da korisnik moze poceti unositi nove tikete od nule
+def ocisti_sve():
+    privremeni_tiketi.clear()
+    for stavka in tabela.get_children():
+        tabela.delete(stavka)
+    lbl_statistika.config(text="Prosječan TAT: 0.00 min  |  Prosječan WT: 0.00 min")
+
+#basic definicija glavnog prozora aplikacije, sa naslovom i dimenzijama, 
+# a zatim se kreiraju svi potrebni widgeti (labela, entry, button, treeview) 
+# i organizuju u odgovarajuce okvire (frame) da bi aplikacija bila pregledna i funkcionalna
+root = tk.Tk()
+root.title("IT Service - Sistem za upravljanje tiketima")
+root.geometry("850x650")
+
+# naslov aplikacije, i formatiranje fonta da bude veci i boldovan, da se istice na vrhu prozora
+naslov = tk.Label(root, text="IT SERVICE - SISTEM ZA UPRAVLJANJE TIKETIMA", font=("Arial", 16, "bold"))
+naslov.pack(pady=15)
+
+# okvir za izbor algoritma, sa radio buttonima koji omogucavaju korisniku 
+# da izabere koji algoritam zeli koristiti za obradu tiketa, 
+# a zatim se poziva funkcija osvjezi_formu() koja ce prikazati ili sakriti polje za prioritet 
+# u zavisnosti od izbora algoritma, fill="x" znaci da ce okvir zauzeti cijelu sirinu prozora, 
+# a padx i pady dodaju malo prostora oko okvira
+okvir_meni = tk.LabelFrame(root, text=" Izaberite neki od sljedeće ponuđenih algoritama ", font=("Arial", 10, "bold"), padx=10, pady=10)
+okvir_meni.pack(fill="x", padx=20, pady=5)
+
+# varijabla koja ce cuvati vrijednost izabranog radio buttona, 
+# default je postavljen na "1" sto znaci da je SJF non-preemptive 
+# izabran kao default opcija kada se aplikacija pokrene, 
+# tako da korisnik odmah moze poceti unositi tikete bez potrebe da prvo bira algoritam, 
+# a zatim se poziva funkcija osvjezi_formu() koja ce sakriti polje za prioritet 
+# jer SJF ne koristi prioritet, 
+# i prikazati ga samo kada korisnik izabere opciju 3 (Priority Scheduling)
+izbor_algoritma = tk.StringVar(value="1")
+
+#opcije radio buttona za izbor algoritma, svaki sa svojom vrijednoscu ("1" za SJF non-preemptive, "2" za SRTF, "3" za Priority), 
+# i svaki poziva funkciju osvjezi_formu() kada se izabere, 
+# da bi se prikazalo ili sakrilo polje za prioritet, anchor "w" znaci da ce tekst biti poravnat lijevo, 
+# a pady=2 dodaje malo vertikalnog prostora izmedju radio buttona, 
+# okvir_meni je roditeljski widget u koji se smjestaju radio buttoni
+rb_sjf = ttk.Radiobutton(okvir_meni, text="Shortest Job First (SJF - Non-Preemptive)", variable=izbor_algoritma, value="1", command=osvjezi_formu)
+rb_sjf.pack(anchor="w", pady=2)
+
+rb_srtf = ttk.Radiobutton(okvir_meni, text="Shortest Job First preemptive (SRTF)", variable=izbor_algoritma, value="2", command=osvjezi_formu)
+rb_srtf.pack(anchor="w", pady=2)
+
+rb_priority = ttk.Radiobutton(okvir_meni, text="Priority Scheduling", variable=izbor_algoritma, value="3", command=osvjezi_formu)
+rb_priority.pack(anchor="w", pady=2)
+
+# okvir za unos podataka, gdje korisnik moze unijeti vrijeme dolaska narudzbe, vrijeme pripreme narudzbe, i prioritet (ako je izabran Priority Scheduling),
+# a zatim klikom na dugme "Dodaj tiket" dodaje taj tiket u privremenu listu tiketa i prikazuje ga u tabeli, 
+# fill="x" znaci da ce okvir zauzeti cijelu sirinu prozora, a padx i pady dodaju malo prostora oko okvira sa x i y ose
+okvir_unos = tk.LabelFrame(root, text=" Unos podataka ", font=("Arial", 10, "bold"), padx=10, pady=10)
+okvir_unos.pack(fill="x", padx=20, pady=10)
+
+tk.Label(okvir_unos, text="Vrijeme dolaska narudžbe (min):").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+ent_dolazak = ttk.Entry(okvir_unos, width=8)
+ent_dolazak.grid(row=0, column=1, padx=5, pady=5)
+
+tk.Label(okvir_unos, text="Vrijeme pripreme narudžbe (min):").grid(row=0, column=2, sticky="w", padx=5, pady=5)
+ent_trajanje = ttk.Entry(okvir_unos, width=8)
+ent_trajanje.grid(row=0, column=3, padx=5, pady=5)
+
+# polje za prioritet se kreira, ali se sakriva po defaultu, 
+# jer aplikacija starta sa SJF opcijom koja ne koristi prioritet, 
+# ali ce se prikazati kada korisnik izabere opciju 3 (Priority Scheduling) preko radio buttona
+lbl_prioritet = tk.Label(okvir_unos, text="Prioritet (0 - najveći):")
+lbl_prioritet.grid(row=0, column=4, sticky="w", padx=5, pady=5)
+ent_prioritet = ttk.Entry(okvir_unos, width=8)
+ent_prioritet.grid(row=0, column=5, padx=5, pady=5)
+
+# Sakriveno polje po defaultu jer aplikacija starta sa SJF opcijom
+lbl_prioritet.grid_remove()
+ent_prioritet.grid_remove()
+
+# dugme za dodavanje tiketa, koje poziva funkciju dodaj_tiket() kada se klikne, 
+# a ta funkcija ce uzeti unesene podatke, kreirati tiket, dodati ga u privremenu listu tiketa, 
+# i prikazati ga u tabeli, a zatim ocistiti polja za unos da bi korisnik mogao unijeti novi tiket
+btn_dodaj = ttk.Button(okvir_unos, text="Dodaj tiket", command=dodaj_tiket)
+btn_dodaj.grid(row=0, column=6, padx=15, pady=5)
+
+# tabela za prikaz tiketa, gdje se prikazuju svi unijeti tiketi sa njihovim vremenom dolaska, trajanjem, prioritetom (ako postoji),
+# i nakon obrade algoritma, prikazuju se i vrijeme kraja, TAT i WT, okvir_tabela je parent widget u koji se smjesta tabela, 
+# fill="both" znaci da ce tabela zauzeti sav prostor unutar okvira, 
+# expand=True znaci da ce se tabela prosiriti ako se prozor poveca
+okvir_tabela = tk.LabelFrame(root, text=" Prikaz narudžbi sa izračunatim vrijednostima ", font=("Arial", 10, "bold"), padx=10, pady=10)
+okvir_tabela.pack(fill="both", expand=True, padx=20, pady=5)
+
+# definicija kolona tabele, gdje se navode nazivi kolona koje ce se prikazivati, 
+# i zatim se kreira Treeview widget koji ce biti tabela, sa tim kolonama, 
+# i show="headings" znaci da ce se prikazivati samo zaglavlja kolona, 
+# bez defaultne prve kolone koja se koristi za hijerarhiju
+kolone = ("id", "dolazak", "trajanje", "prioritet", "kraj", "tat", "wt")
+tabela = ttk.Treeview(okvir_tabela, columns=kolone, show="headings")
+
+# postavljanje naziva kolona u tabeli, gdje se koristi metoda heading() 
+# da se definise tekst koji ce se prikazivati u zaglavlju svake kolone
+tabela.heading("id", text="#Br.Narudzbe")
+tabela.heading("dolazak", text="T-DolaskaNarudzbe")
+tabela.heading("trajanje", text="T-PripremeNarudzbe")
+tabela.heading("prioritet", text="Prioritet")
+tabela.heading("kraj", text="T-Kompletiranja")
+tabela.heading("tat", text="UkupnoPovratno-T")
+tabela.heading("wt", text="T-Cekanja")
+
+# postavljanje sirine i poravnanja za svaku kolonu, 
+# gdje se koristi metoda column() da se definise sirina kolone (width=110) i poravnanje teksta 
+# (anchor="center") da bude centrirano
+# prikazat ce se sve kolone sa istom sirinom od 110 piksela, i tekst ce biti centriran u svakoj celiji tabele, 
+# sto ce dati uredan i pregledan izgled tabele
+for kol in kolone:
+    tabela.column(kol, width=110, anchor="center")
+
+# smjestanje tabele unutar okvira_tabela, 
+# fill="both" znaci da ce tabela zauzeti sav prostor unutar okvira
+# pack metoda se koristi za organizaciju widgeta u prozoru, 
+# i u ovom slucaju tabela ce se prosiriti da popuni sav prostor unutar okvira_tabela, 
+# a expand=True znaci da ce se tabela prosiriti ako se prozor poveca
+tabela.pack(fill="both", expand=True)
+
+# upravljacki okvir sa dugmadima za pokretanje obrade i ciscenje tabele,
+# a zatim labela za prikaz prosjecnog TAT i WT nakon obrade 
+okvir_akcije = tk.Frame(root)
+okvir_akcije.pack(fill="x", padx=20, pady=10)
+
+btn_obradi = ttk.Button(okvir_akcije, text="POKRENI OBRADU", command=pokreni_algoritam)
+btn_obradi.pack(side="left", padx=5)
+
+btn_ocisti = ttk.Button(okvir_akcije, text="Očisti sve", command=ocisti_sve)
+btn_ocisti.pack(side="left", padx=5)
+
+lbl_statistika = tk.Label(okvir_akcije, text="Prosječan TAT: 0.00 min  |  Prosječan WT: 0.00 min", font=("Arial", 11, "bold"))
+lbl_statistika.pack(side="right", padx=10)
+
+root.mainloop()
