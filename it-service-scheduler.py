@@ -204,6 +204,67 @@ def SJFAlgorithmPE(lista_tiketa):
             
     return zavrseni_tiketi, dnevnik_rada # vracamo listu kompletiranih tiketa i gotov dnevnik sa svim prekidima
 
+# funkcija za Priority Scheduling algoritam, koji se poziva kada korisnik izabere opciju 3
+# funkcionise slicno kao i SJF non-preemptive, ali umjesto da bira tiket sa najkracim trajanjem,
+# bira tiket sa najvisim prioritetom (najmanja vrijednost polja "prioritet"), 
+# i onda ga obradi do kraja bez prekida
+def PriorityScheduling(lista_tiketa):
+    trenutno_vrijeme = 0 # alocirano vrijeme gdje mjerimo sve operacije 
+    # /poredimo ih s ovom nulom koja raste
+    zavrseni_tiketi = [] #appendaju se zavrseni procesi nakon obrade u ovu listu
+    dnevnik_rada = [] # privremena lista u koju upisujemo desavanja minutu po minutu, 
+    #ukljucujuci i prekide koji se dese
+
+    while len(lista_tiketa) > 0: #dok je lista tiketa koja se koristi za obradu algoritma veca od 0, 
+        #znaci da jos uvijek imamo tikete koje treba obraditi
+        dostupni = [] #privremena lista dostupnih procesa koji su stigli u sistem
+        for t in lista_tiketa: 
+            if t["dolazak"] <= trenutno_vrijeme: 
+                dostupni.append(t) #prolazak kroz citavu listu tiketa, 
+                #provjeravamo da li je vrijeme dolaska manje ili vece od 
+                #trenutnog vremena, ako jeste, dodajemo ga u privremenu listu 
+                #dostupnih procesa koji su stigli u sistem i cekaju svoj red
+
+        if len(dostupni) == 0:
+            dnevnik_rada.append(f"Minuta {trenutno_vrijeme}: Procesor besposlen (nema narudzi).")
+            trenutno_vrijeme += 1
+            continue #ako niko nije stigao, vrijeme se mora nastaviti otkucavati, 
+        #tako da pse povecava za 1, 
+        # i vraca se na pocetak while petlje da provjeri je li iko stigao i ko je 
+        # (isto kao i kod non-preemptive)
+
+        najvisi_prioritet = dostupni[0] #uzimamo (pretpostavljamo) da je tiket sa najvisim prioritetom prvi u nizu dostupnih
+        for t in dostupni: 
+            if t["prioritet"] < najvisi_prioritet["prioritet"]:
+                najvisi_prioritet = t #gledamo da li postoji ikakav proces kojem je prioritet manji od zadanog, 
+                #ako jeste on postaje novi tiket sa najvisim prioritetom (ako je prioritet 0, 
+                # to znaci da je to najvazniji tiket, a ako je 1, to znaci da je manje vazan itd.)
+        
+        pocetak = trenutno_vrijeme # spasavamo pocetnu minutu rada na ovom tiketu prije nego 
+        #sto povecamo sistemski sat
+        trenutno_vrijeme += najvisi_prioritet["trajanje"] # -> non-preemptive, sabiramo trajanje tiketa 
+        #na trenutno vrijeme, jer se proces mora obraditi do kraja bez prekida 
+        # (ako je trenutno_vrijeme bio na 5.minuti, a usluga traje 10 minuta -> onda 
+        # automatski ih sabiramo i postavljamo trenutno_vrijeme na 15.minutu 
+
+        dnevnik_rada.append(f"Minuta {pocetak} do {trenutno_vrijeme}: Izvodi se Tiket #{najvisi_prioritet['id']} (Prioritet: {najvisi_prioritet['prioritet']}).")
+        # nakon sto smo obradili cijeli tiket, 
+        # u dnevnik upisujemo tacno od koje do koje minute je radio taj tiket bez ikakvih prekida
+        
+        najvisi_prioritet["kraj"] = trenutno_vrijeme #ovdje upisujemo tacno kada je klijent dobio uslugu
+        najvisi_prioritet["tat"] = najvisi_prioritet["kraj"] - najvisi_prioritet["dolazak"] 
+        #tat - ukupno vrijeme koje je proces proveo u sistemu (od ulasksa od zavrsetka)
+        najvisi_prioritet["wt"] = najvisi_prioritet["tat"] - najvisi_prioritet["trajanje"]
+        #wt - waiting time(vrijeme cekanja)
+
+        zavrseni_tiketi.append(najvisi_prioritet) # kada imamo zavrsena popunjena sva polja, 
+        #prebacujemo privremenu listu najvisi_prioritet u listu zavrsenih poslova
+        lista_tiketa.remove(najvisi_prioritet) #brise taj tiket iz glavne liste, 
+        #ako je proces zavrsio, uklanja se iz liste tiketa koji cekaju na obradu
+
+    return zavrseni_tiketi, dnevnik_rada # vracamo listu kompletiranih tiketa 
+#i gotov dnevnik sa svim desavanjima
+
 
 #funkcija za prikaz rezultata u tabeli, koja se poziva nakon obrade algoritma, 
 # i prima listu zavrsenih tiketa sa popunjenim poljima za kraj, tat i wt
@@ -265,19 +326,32 @@ def pokreni_algoritam():
         rezultati, dnevnik = SJFAlgorithmPE(lista_za_obradu)
         prikazi_rezultate_u_tabeli(rezultati, dnevnik)
     elif algoritam == "3":
-        messagebox.showinfo("Priority", "Ovdje će ići tvoj Priority kôd.")
+        rezultati, dnevnik = PriorityScheduling(lista_za_obradu)
+        prikazi_rezultate_u_tabeli(rezultati, dnevnik)
 
 #standard cls funkcija koja cisti sve podatke i resetuje formu, 
 # tako da korisnik moze poceti unositi nove tikete od nule
 def ocisti_sve():
-    privremeni_tiketi.clear()
+    privremeni_tiketi.clear() #brisemo sve tikete iz privremene liste, 
+    #tako da nema starih tiketa koji se prikazuju u tabeli ili se obraduju algoritmom
+
     for stavka in tabela.get_children():
-        tabela.delete(stavka)
+        tabela.delete(stavka) #za svaku stavku u tabeli, brisemo je, 
+        #tako da tabela bude prazna i spremna za nove podatke
+
     # cistimo tekstualno polje dnevnika i ponovo ga zakljucavamo
-    txt_dnevnik.config(state="normal")
-    txt_dnevnik.delete("1.0", tk.END)
-    txt_dnevnik.config(state="disabled")
+    txt_dnevnik.config(state="normal") #omogucavamo pisanje u tekstualno polje dnevnika, 
+    #state normal znaci da korisnik moze mijenjati tekst
+
+    txt_dnevnik.delete("1.0", tk.END) #brisemo sav tekst iz dnevnika, 
+    #pocinjemo od prve linije (1.0) do kraja (tk.END)
+
+    txt_dnevnik.config(state="disabled") #nakon brisanja, 
+    #ponovo zakljucavamo tekstualno polje dnevnika, 
+    # state disabled znaci da korisnik ne moze mijenjati tekst
+
     lbl_statistika.config(text="Prosječan TAT: 0.00 min  |  Prosječan WT: 0.00 min")
+    # resetujemo labelu sa statistikom da prikazuje 0.00 za prosjecan TAT i WT
 
 #basic definicija glavnog prozora aplikacije, sa naslovom i dimenzijama, 
 # a zatim se kreiraju svi potrebni widgeti (labela, entry, button, treeview) 
